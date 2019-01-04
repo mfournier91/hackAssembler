@@ -6,7 +6,6 @@
   let fileName = inputFilePath.split('/')
   fileName = fileName[fileName.length - 1]
   fileName = fileName.split('.asm')[0]
-  console.log('\n',fileName,'\n')
 
   const fs = require('fs');
   const compTable = {
@@ -60,11 +59,40 @@
     'JMP' : '111',
   }
 
+  let symbolTable = {
+    'R0' : '0',
+    'R1' : '1',
+    'R2' : '2',
+    'R3' : '3',
+    'R4' : '4',
+    'R5' : '5',
+    'R6' : '6',
+    'R7' : '7',
+    'R8' : '8',
+    'R9' : '9',
+    'R10' : '10',
+    'R11' : '11',
+    'R12' : '12',
+    'R13' : '13',
+    'R14' : '14',
+    'R15' : '15',
+    'SCREEN' : '16384',
+    'KBD' : '24576',
+    'SP' : '0',
+    'LCL' : '1',
+    'ARG' : '2',
+    'THIS' : '3',
+    'THAT' : '4',
+  }
+
   fs.readFile(inputFilePath, 'utf8', function(err, data) {
     let input = data.split('\n')
     input = input.map(removeWhitespace)
     input = input.map(removeComments)
     input = input.filter(notEmpty)
+    completeSymbolTable(input)
+    input = input.filter(notLabels)
+    input = input.map(convertSymbolsToMemoryAddress)
     input = input.map(translate)
     console.log(input)
     fs.writeFile(fileName + '.hack', input.join('\n'), (err) => {
@@ -83,6 +111,44 @@
 
   function notEmpty(instruction) {
     return instruction
+  }
+
+  function completeSymbolTable(instructions) {
+    let instructionCounter = 0;
+    instructions.forEach((instruction) => {
+      if (RegExp(/^[(][a-zA-Z_$][a-zA-Z_.$0-9]*[)]$/g).test(instruction)) {
+        let symbol = instruction.split('(')[1].split(')')[0];
+        symbolTable[symbol] = instructionCounter;
+      }
+      else {
+        instructionCounter++
+      }
+    })
+
+    let ramCounter = 16;
+    instructions.forEach((instruction) => {
+      if (RegExp(/^[@][a-zA-Z_$][a-zA-Z_.$0-9]*$/g).test(instruction)) {
+        let symbol = instruction.split('@')[1];
+        if (! symbolTable[symbol]) {
+          symbolTable[symbol] = ramCounter.toString()
+          ramCounter++;
+        }
+      }
+    })
+  }
+
+  function notLabels(instruction) {
+    return ! (RegExp(/^[(][a-zA-Z_$][a-zA-Z_.$0-9]*[)]$/g).test(instruction))
+  }
+
+  function convertSymbolsToMemoryAddress(instruction) {
+    if (RegExp(/^[@][a-zA-Z_$][a-zA-Z_.$0-9]*$/g).test(instruction)) {
+      let symbolAddress = symbolTable[instruction.split('@')[1]];
+      return '@' + symbolAddress
+    }
+    else {
+      return instruction
+    }
   }
 
   function getInstructionType(instruction) {
